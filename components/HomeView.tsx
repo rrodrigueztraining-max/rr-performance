@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, AreaChart, Area } from "recharts";
-import { Activity, Moon, Scale } from "lucide-react";
+import { Activity, Moon, Scale, LogOut } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
+import { useAuth } from "@/context/AuthContext";
 import { doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
 import PendingFormsAlert from "./forms/PendingFormsAlert";
 
@@ -20,6 +21,7 @@ interface HomeViewProps {
 }
 
 export default function HomeView({ userName, onStartWorkout, onNavigate, nextSession }: HomeViewProps) {
+    const { logout } = useAuth();
     const [greeting, setGreeting] = useState("Bienvenido");
     const [stepGoal, setStepGoal] = useState(10000);
     const [coachNote, setCoachNote] = useState("");
@@ -131,15 +133,25 @@ export default function HomeView({ userName, onStartWorkout, onNavigate, nextSes
                 `}
             </style>
             {/* 1. Header & Greeting */}
-            <div className="flex justify-between items-end">
+            <div className="flex justify-between items-start md:items-end">
                 <div>
                     <h2 className="text-gray-400 text-sm font-medium uppercase tracking-widest mb-1">Centro de Mando</h2>
-                    <h1 className="text-4xl font-bold text-white">
+                    <h1 className="text-3xl md:text-4xl font-bold text-white">
                         {greeting}, <span className="text-[#BC0000]">{userName.split(" ")[0]}</span>
                     </h1>
                 </div>
-                <div className="hidden sm:block text-right">
-                    <p className="text-2xl font-bold text-white">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' })}</p>
+                <div className="flex items-center gap-4">
+                    <div className="hidden sm:block text-right">
+                        <p className="text-2xl font-bold text-white">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric' })}</p>
+                    </div>
+                    <button
+                        onClick={() => logout()}
+                        className="flex items-center gap-2 px-3 py-2 bg-gray-900/80 hover:bg-[#BC0000] rounded-xl text-gray-400 hover:text-white transition-all border border-gray-800 hover:border-[#BC0000] shadow-lg group"
+                        aria-label="Cerrar Sesión"
+                    >
+                        <span className="text-xs font-bold uppercase tracking-wider">Salir</span>
+                        <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    </button>
                 </div>
             </div>
 

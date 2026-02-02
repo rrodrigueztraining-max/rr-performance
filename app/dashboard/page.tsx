@@ -18,7 +18,11 @@ export default function DashboardPage() {
     }, [user, loading, router]);
 
     if (loading) {
-        return <div className="min-h-screen bg-gray-950 flex items-center justify-center text-white">Cargando...</div>;
+        return (
+            <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#BC0000]"></div>
+            </div>
+        );
     }
 
     if (!user) return null;

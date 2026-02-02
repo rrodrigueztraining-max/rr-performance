@@ -23,6 +23,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  /* Force significantly more space: Safe Area + 32px extra breathing room */
+  padding-top: calc(env(safe-area-inset-top) + 32px);
 }
 
 /* Custom Utilities */
@@ -58,4 +60,9 @@ body {
 
 .safe-area-bottom {
   padding-bottom: max(env(safe-area-inset-bottom), 20px);
+}
+
+/* FORCED SAFE AREA OVERRIDE - USER REQUEST */
+body {
+  padding-top: env(safe-area-inset-top) !important;
 }
