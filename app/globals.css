@@ -24,3 +24,38 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Custom Utilities */
+.bg-carbon-texture {
+  background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+  background-attachment: fixed;
+}
+
+.btn-glow {
+  box-shadow: 0 0 10px rgba(188, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.btn-glow:hover {
+  box-shadow: 0 0 25px rgba(188, 0, 0, 0.8), 0 0 50px rgba(188, 0, 0, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Safe Area Support */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Fallback/Enhanced Safe Area */
+.safe-area-top {
+  padding-top: max(env(safe-area-inset-top), 48px);
+  /* 48px is roughly pt-12, ensures clearing status bar */
+}
+
+.safe-area-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 20px);
+}
