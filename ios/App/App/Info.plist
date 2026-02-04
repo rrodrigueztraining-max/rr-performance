@@ -47,5 +47,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Esta app necesita acceso a tus pasos para mostrar tu progreso de salud y rendimiento.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Esta app necesita acceso para actualizar tus datos de salud y sincronizar tus entrenamientos.</string>
 </dict>
 </plist>

@@ -5,6 +5,8 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTo
 import { Activity, Moon, Scale, Ruler, Plus } from "lucide-react";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, orderBy, limit, onSnapshot, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { Capacitor } from '@capacitor/core';
+import { useStepTracker } from "@/hooks/useStepTracker";
 
 
 // Mock Data removed in favor of Firestore Sync
@@ -173,9 +175,28 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
     };
 
     // Steps State
+    const { dailySteps: realSteps, requestPermissions, fetchTodaySteps, hasPermission } = useStepTracker();
     const [steps, setSteps] = useState(0);
     const [isGoogleLinked, setIsGoogleLinked] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
+    const [isNative, setIsNative] = useState(false);
+
+    useEffect(() => {
+        setIsNative(Capacitor.isNativePlatform());
+        if (Capacitor.isNativePlatform()) {
+            requestPermissions().then((granted) => {
+                if (granted) fetchTodaySteps();
+            });
+        }
+    }, [requestPermissions, fetchTodaySteps]);
+
+    // Update local state when real steps come in
+    useEffect(() => {
+        if (realSteps > 0) {
+            setSteps(realSteps);
+            saveSteps(realSteps); // Sync to Firestore
+            setIsGoogleLinked(true);
+        }
+    }, [realSteps]);
 
     // ... (Bioimpedance & Daily Logs effects remain)
 
@@ -187,47 +208,26 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
         const unsub = onSnapshot(doc(db, "users", user.uid, "daily_stats", today), (doc) => {
             if (doc.exists()) {
                 const data = doc.data();
-                if (data.steps) setSteps(data.steps);
+                // Only overwrite if we don't have real native data yet, or if it's manual
+                if (data.steps && data.steps > steps) setSteps(data.steps);
             }
         });
         return () => unsub();
     }, []);
 
-    const handleGoogleFitConnect = async () => {
-        const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-
-        // Si no hay Client ID, usamos modo manual silenciosamente (sin alertas de error)
-        if (!clientId) {
-            // Modo Manual: Permitir al usuario ingresar datos directamente
-            const realSteps = prompt("Registrar pasos manualmente:", "0");
-            if (realSteps && !isNaN(Number(realSteps))) {
-                saveSteps(Number(realSteps));
-                setIsGoogleLinked(false); // No estamos linkeados realmente
-            }
-            return;
+    const handleSync = async () => {
+        if (isNative) {
+            await requestPermissions();
+            await fetchTodaySteps();
+        } else {
+            alert("Sincronización solo disponible en App Móvil");
         }
-
-        /* 
-        // Lógica Real (Deshabilitada hasta tener credenciales)
-        const tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: 'https://www.googleapis.com/auth/fitness.activity.read',
-            callback: async (response) => {
-                setIsSyncing(true);
-                const steps = await fetchTodaySteps(response.access_token);
-                saveSteps(steps);
-                setIsGoogleLinked(true);
-                setIsSyncing(false);
-            },
-        });
-        tokenClient.requestAccessToken();
-        */
     };
 
     const saveSteps = async (newSteps: number) => {
         const user = auth.currentUser;
         if (!user) return;
-        setSteps(newSteps);
+        // setSteps(newSteps); // Let the effect handle specific UI updates or just local
         const today = new Date().toISOString().split('T')[0];
         await setDoc(doc(db, "users", user.uid, "daily_stats", today), {
             steps: newSteps,
@@ -238,7 +238,6 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* ... Header ... */}
-            {/* Headers are fine, skipping to render ... */}
             <header className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div>
                     <h2 className="text-3xl font-bold text-white">Salud & Progreso</h2>
@@ -273,26 +272,24 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Steps Card (Today) */}
                         <div className="bg-black/60 backdrop-blur-md border border-gray-800 rounded-xl p-6 hover:border-[#BC0000]/30 transition-all">
-                            {/* ... existing Today Steps content ... */}
+
                             <div className="flex items-center justify-between mb-2">
                                 <h3 className="text-lg font-bold text-gray-200 flex items-center gap-2">
                                     <Activity className="text-[#BC0000]" /> Pasos Hoy
                                 </h3>
-                                {isGoogleLinked ? (
-                                    <span className="text-xs text-green-500 font-bold uppercase animate-pulse flex items-center gap-1">
-                                        ● Live (Google Fit)
-                                    </span>
-                                ) : (
+                                {isNative ? (
                                     <button
-                                        onClick={handleGoogleFitConnect}
-                                        className="text-[10px] bg-white/10 hover:bg-white/20 text-white px-2 py-1 rounded border border-white/10 transition-colors"
+                                        onClick={handleSync}
+                                        className="text-[10px] bg-[#BC0000]/20 hover:bg-[#BC0000]/40 text-[#BC0000] px-2 py-1 rounded border border-[#BC0000]/20 transition-colors flex items-center gap-1"
                                     >
-                                        Conectar Fuente
+                                        <Activity className="w-3 h-3" /> Sincronizar
                                     </button>
+                                ) : (
+                                    <span className="text-[10px] text-gray-500">Modo Web</span>
                                 )}
                             </div>
 
-                            {!isGoogleLinked && (
+                            {!isNative && (
                                 <div className="mb-4">
                                     <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 rounded-lg p-1.5 focus-within:border-[#BC0000] transition-colors">
                                         <input
@@ -304,6 +301,7 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
                                                     const val = parseInt((e.target as HTMLInputElement).value);
                                                     if (!isNaN(val) && val > 0) {
                                                         const newTotal = steps + val;
+                                                        setSteps(newTotal); // Optimistic
                                                         saveSteps(newTotal);
                                                         (e.target as HTMLInputElement).value = '';
                                                     }
@@ -317,6 +315,7 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
                                                 const val = parseInt(input.value);
                                                 if (!isNaN(val) && val > 0) {
                                                     const newTotal = steps + val;
+                                                    setSteps(newTotal);
                                                     saveSteps(newTotal);
                                                     input.value = '';
                                                 }
@@ -326,12 +325,15 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
                                             <Plus className="w-4 h-4" />
                                         </button>
                                     </div>
-                                    <p className="text-[10px] text-gray-500 mt-1 pl-1">Ingresa pasos manualmente si no usas Google Fit.</p>
+                                    <p className="text-[10px] text-gray-500 mt-1 pl-1">Ingresa pasos manualmente si no usas la App Móvil.</p>
                                 </div>
                             )}
 
-                            {isGoogleLinked && (
-                                <p className="text-sm text-gray-500 mb-6">Sincronizado desde tu dispositivo</p>
+                            {isNative && (
+                                <p className="text-sm text-gray-500 mb-6 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                    Sincronizado con Salud
+                                </p>
                             )}
 
                             <div className="flex items-end gap-2 mb-2">
