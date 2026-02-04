@@ -12,7 +12,10 @@ export default function DashboardPage() {
     const router = useRouter();
 
     useEffect(() => {
-        if (!loading && !user) {
+        // BAJO NINGÚN CONCEPTO redirigir si loading es true
+        if (loading) return;
+
+        if (!user) {
             router.push("/login");
         }
     }, [user, loading, router]);

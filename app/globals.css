@@ -63,7 +63,12 @@ body {
 }
 
 /* FORCED SAFE AREA OVERRIDE - USER REQUEST */
-/* FORCED SAFE AREA OVERRIDE - USER REQUEST */
+html,
 body {
-  padding-top: max(40px, env(safe-area-inset-top)) !important;
+  background-color: #050505 !important;
+  /* App background color */
+}
+
+body {
+  padding-top: env(safe-area-inset-top) !important;
 }
