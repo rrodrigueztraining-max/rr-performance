@@ -1,7 +1,37 @@
+"use client";
 import Link from "next/link";
 import Image from "next/image";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.push("/dashboard");
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    // Optional: Show a splash screen or just existing black bg while checking
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white">
+        <div className="mb-8 relative w-24 h-24 md:w-32 md:h-32 animate-pulse">
+          <Image
+            src="/assets/logo.png"
+            alt="RR Performance Logo"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#09090b] text-white p-6">
 
