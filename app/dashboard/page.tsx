@@ -22,8 +22,15 @@ export default function DashboardPage() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#BC0000]"></div>
+            <div style={{
+                height: '100vh',
+                background: 'black',
+                color: 'white',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center'
+            }}>
+                CARGANDO USUARIO...
             </div>
         );
     }
