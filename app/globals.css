@@ -63,6 +63,7 @@ body {
 }
 
 /* FORCED SAFE AREA OVERRIDE - USER REQUEST */
+/* FORCED SAFE AREA OVERRIDE - USER REQUEST */
 body {
-  padding-top: env(safe-area-inset-top) !important;
+  padding-top: max(40px, env(safe-area-inset-top)) !important;
 }

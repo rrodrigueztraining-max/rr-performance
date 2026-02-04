@@ -26,11 +26,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        let unsubscribe: () => void;
+        let unsubscribe: (() => void) | undefined;
 
         const initAuth = async () => {
-            // Force persistence logic as requested by user
-            await setPersistence(auth, browserLocalPersistence);
+            try {
+                // CRITICAL: Force browser local persistence for session retention
+                await setPersistence(auth, browserLocalPersistence);
+                console.log("✅ Session persistence set to LOCAL");
+            } catch (error) {
+                console.error("❌ Error setting session persistence:", error);
+            }
 
             unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
                 if (currentUser) {
