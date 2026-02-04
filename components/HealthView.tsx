@@ -379,10 +379,7 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
                                     />
                                 </div>
                             </div>
-                            <div className="mt-6 flex items-center gap-2 text-xs text-gray-500 bg-indigo-500/10 p-3 rounded text-indigo-300">
-                                <Moon className="w-4 h-4" />
-                                <span>Calidad de sueño estimada: 85%</span>
-                            </div>
+
                         </div>
                     </div>
 
