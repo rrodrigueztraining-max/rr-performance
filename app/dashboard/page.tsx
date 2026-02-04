@@ -30,7 +30,7 @@ export default function DashboardPage() {
                 justifyContent: 'center',
                 alignItems: 'center'
             }}>
-                CARGANDO USUARIO...
+                VERIFICANDO SESIÓN...
             </div>
         );
     }

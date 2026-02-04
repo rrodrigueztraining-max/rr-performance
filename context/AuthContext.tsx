@@ -28,38 +28,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         let unsubscribe: (() => void) | undefined;
 
-        const initAuth = async () => {
-            try {
-                // CRITICAL: Force browser local persistence for session retention
-                await setPersistence(auth, browserLocalPersistence);
-                console.log("✅ Session persistence set to LOCAL");
-            } catch (error) {
-                console.error("❌ Error setting session persistence:", error);
-            }
+        // 1. Configuramos persistencia PRIMERO
+        setPersistence(auth, browserLocalPersistence).then(() => {
+            console.log("✅ Persistence ensures LOCAL session.");
 
+            // 2. Escuchamos cambios
             unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
                 if (currentUser) {
                     // IMMEDIATELY set user to unblock UI, then fetch role
                     setUser(currentUser);
 
+                    // Logic to fetch role specific to this app
                     const COACH_EMAIL = "rrodrigueztraining@gmail.com";
                     const isCoach = currentUser.email?.toLowerCase() === COACH_EMAIL;
 
-                    // 1. OPTIMISTIC UPDATE: Grant access immediately if email matches
-                    if (isCoach) {
-                        console.log("Optimistically granting Coach access");
-                        setRole("coach");
-                    }
-
-                    // Set user to state immediately
-                    setUser(currentUser);
+                    // Optimistic update
+                    if (isCoach) setRole("coach");
 
                     const createProfile = async () => {
-                        console.log("Creating default profile...");
                         const assignedRole = isCoach ? "coach" : "client";
-
                         try {
-                            // Create user document
                             await setDoc(doc(db, "users", currentUser.uid), {
                                 uid: currentUser.uid,
                                 email: currentUser.email,
@@ -72,7 +60,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                 currentSteps: 0
                             }, { merge: true });
 
-                            // Initialize today's daily_stats for clients
                             if (!isCoach) {
                                 const today = new Date().toISOString().split('T')[0];
                                 await setDoc(doc(db, "users", currentUser.uid, "daily_stats", today), {
@@ -84,11 +71,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                     created_at: serverTimestamp()
                                 }, { merge: true });
                             }
-
                             if (!isCoach) setRole(assignedRole);
-                            console.log(`✅ Profile created for ${assignedRole}`);
                         } catch (e) {
-                            console.error("Failed to create/update profile:", e);
+                            console.error("Profile creation error:", e);
                             if (!isCoach) setRole("client");
                         }
                     };
@@ -99,14 +84,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
                         if (userDocSnap.exists()) {
                             const userData = userDocSnap.data();
-
-                            // Security/Consistency Check: Enforce Coach Role if email matches
                             if (isCoach && userData.role !== "coach") {
-                                console.log("Upgrading user to Coach in DB...");
                                 await setDoc(userDocRef, { role: "coach" }, { merge: true });
-                                // Role already set optimistically
                             } else if (!isCoach) {
-                                // Normal logic for clients
                                 setRole((userData.role as Role) || "client");
                             }
                         } else {
@@ -114,11 +94,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         }
                     } catch (error: any) {
                         console.error("Error fetching user role:", error);
-                        // Handle "Missing permissions" by attempting creation (typical for first login with strict rules)
-                        if (error.code === 'permission-denied' || error.message.includes("Missing or insufficient permissions")) {
+                        if (error.code === 'permission-denied' || error.message.includes("Missing")) {
                             await createProfile();
                         } else if (!isCoach) {
-                            // Fallback for non-coach users
                             setRole("client");
                         }
                     }
@@ -126,11 +104,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setUser(null);
                     setRole(null);
                 }
+
+                // SOLO AQUÍ se quita el loading
                 setLoading(false);
             });
-        };
-
-        initAuth();
+        }).catch((error) => {
+            console.error("Error setting persistence:", error);
+            // Even if persistence fails, we should try to listen or at least stop loading
+            setLoading(false);
+        });
 
         return () => {
             if (unsubscribe) unsubscribe();
@@ -140,10 +122,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const logout = async () => {
         try {
             await auth.signOut();
-            localStorage.clear(); // Clear local state
+            localStorage.clear();
             setUser(null);
             setRole(null);
-            // Force redirect to login
             window.location.href = "/login";
         } catch (error) {
             console.error("Logout error:", error);
