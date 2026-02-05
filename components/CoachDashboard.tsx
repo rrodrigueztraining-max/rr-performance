@@ -430,35 +430,111 @@ export default function CoachDashboard() {
 
 
                             {/* Stats Overview */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div className="bg-black/40 backdrop-blur-sm border border-gray-800 rounded-xl p-6 hover:border-[#BC0000]/50 transition-colors">
-                                    <h3 className="text-gray-400 text-sm font-medium">Clientes Activos</h3>
-                                    <p className="text-3xl font-bold text-white mt-2">{clients.length}</p> {/* Already filtered by isActive in derived state */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+                                <div className="bg-black/40 backdrop-blur-sm border border-gray-800 rounded-xl p-4 md:p-6 hover:border-[#BC0000]/50 transition-colors">
+                                    <h3 className="text-gray-400 text-xs md:text-sm font-medium uppercase">Activos</h3>
+                                    <p className="text-2xl md:text-3xl font-bold text-white mt-1 md:mt-2">{clients.length}</p>
                                 </div>
-                                <div className="bg-black/40 backdrop-blur-sm border border-gray-800 rounded-xl p-6 hover:border-[#BC0000]/50 transition-colors">
-                                    <h3 className="text-gray-400 text-sm font-medium">Entrenos Completados Hoy</h3>
-                                    <p className="text-3xl font-bold text-white mt-2">
-                                        {clients.filter(c => c.workoutStatus === "completed").length} / {clients.filter(c => c.workoutStatus !== "rest").length}
+                                <div className="bg-black/40 backdrop-blur-sm border border-gray-800 rounded-xl p-4 md:p-6 hover:border-[#BC0000]/50 transition-colors">
+                                    <h3 className="text-gray-400 text-xs md:text-sm font-medium uppercase">Entrenos</h3>
+                                    <p className="text-2xl md:text-3xl font-bold text-white mt-1 md:mt-2">
+                                        {clients.filter(c => c.workoutStatus === "completed").length} <span className="text-sm text-gray-500">/ {clients.filter(c => c.workoutStatus !== "rest").length}</span>
                                     </p>
                                 </div>
-                                <div className="bg-black/40 backdrop-blur-sm border border-gray-800 rounded-xl p-6 hover:border-[#BC0000]/50 transition-colors">
-                                    <h3 className="text-gray-400 text-sm font-medium">Cumplimiento de Pasos</h3>
-                                    <p className="text-3xl font-bold text-white mt-2">
+                                <div className="bg-black/40 backdrop-blur-sm border border-gray-800 rounded-xl p-4 md:p-6 hover:border-[#BC0000]/50 transition-colors">
+                                    <h3 className="text-gray-400 text-xs md:text-sm font-medium uppercase">Pasos</h3>
+                                    <p className="text-2xl md:text-3xl font-bold text-white mt-1 md:mt-2">
                                         {stepCompliance}%
                                     </p>
                                 </div>
                                 <div
                                     onClick={() => setActiveTab('templates')}
-                                    className="bg-gradient-to-br from-[#BC0000]/20 to-black backdrop-blur-sm border border-[#BC0000]/30 rounded-xl p-6 hover:border-[#BC0000] transition-colors cursor-pointer group"
+                                    className="bg-gradient-to-br from-[#BC0000]/20 to-black backdrop-blur-sm border border-[#BC0000]/30 rounded-xl p-4 md:p-6 hover:border-[#BC0000] transition-colors cursor-pointer group flex flex-col justify-center items-center md:items-start"
                                 >
-                                    <h3 className="text-[#BC0000] text-sm font-bold group-hover:text-white transition-colors">MIS PLANTILLAS</h3>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <span className="text-white text-xs">Gestionar Biblioteca</span>
+                                    <h3 className="text-[#BC0000] text-xs md:text-sm font-bold group-hover:text-white transition-colors text-center md:text-left">PLANTILLAS</h3>
+                                    <div className="flex items-center gap-2 mt-1 md:mt-2">
+                                        <span className="text-white text-[10px] md:text-xs">Gestionar</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-gray-800 overflow-hidden overflow-x-auto">
+                            {/* Mobile Client Cards */}
+                            <div className="md:hidden space-y-4">
+                                <div className="flex justify-between items-center mb-4 px-2">
+                                    <h3 className="text-lg font-bold text-white">Atletas</h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-[10px] font-bold ${showInactive ? 'text-white' : 'text-gray-500'}`}>Ver Inactivos</span>
+                                        <button
+                                            onClick={() => setShowInactive(!showInactive)}
+                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showInactive ? 'bg-[#BC0000]' : 'bg-gray-700'}`}
+                                        >
+                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showInactive ? 'translate-x-5' : 'translate-x-1'}`} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {loading ? (
+                                    <div className="text-center py-8 text-gray-500">Cargando...</div>
+                                ) : clients.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500">No hay clientes activos.</div>
+                                ) : (
+                                    clients.map((client: any) => (
+                                        <div key={client.id} className="bg-zinc-900/80 border border-white/5 rounded-2xl padding-4 p-4 shadow-sm relative overflow-hidden">
+                                            {/* Status Dot */}
+                                            <div className={`absolute top-4 right-4 w-2 h-2 rounded-full ${client.isActive ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+
+                                            <div className="flex items-center gap-4 mb-4">
+                                                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-[#BC0000] to-gray-900 flex items-center justify-center text-white font-bold text-lg shadow-lg border border-[#BC0000]/20">
+                                                    {client.displayName.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-white font-bold text-lg leading-tight">{client.displayName}</h3>
+                                                    <p className="text-gray-500 text-xs">{client.email}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                                <div className="bg-black/40 rounded-lg p-2 border border-white/5">
+                                                    <span className="text-[10px] text-gray-400 uppercase font-bold block mb-1">Pasos de Hoy</span>
+                                                    <div className="flex items-end gap-1">
+                                                        <span className="text-white font-bold">{client.currentSteps > 0 ? (client.currentSteps / 1000).toFixed(1) + 'k' : '0'}</span>
+                                                        <div className="h-1 flex-1 bg-gray-800 rounded-full mb-1.5 ml-1">
+                                                            <div
+                                                                className="h-full bg-[#BC0000] rounded-full"
+                                                                style={{ width: `${Math.min((client.currentSteps / client.stepsGoal) * 100, 100)}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-black/40 rounded-lg p-2 border border-white/5">
+                                                    <span className="text-[10px] text-gray-400 uppercase font-bold block mb-1">Estado</span>
+                                                    <div className="transform scale-90 origin-left">
+                                                        {getStatusBadge(client.workoutStatus)}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between gap-3">
+                                                <button
+                                                    onClick={() => handleToggleActive(client)}
+                                                    className="p-3 bg-gray-800 text-gray-400 rounded-xl hover:bg-gray-700 hover:text-white transition-colors"
+                                                >
+                                                    <Power className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => setSelectedClient(client)}
+                                                    className="flex-1 py-3 bg-[#BC0000] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg hover:bg-red-700 transition-colors"
+                                                >
+                                                    Ver Perfil
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Desktop Clients Table */}
+                            <div className="hidden md:block bg-black/40 backdrop-blur-sm rounded-xl border border-gray-800 overflow-hidden overflow-x-auto">
                                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
                                     <h3 className="text-lg font-bold text-white">Estado de los Clientes</h3>
                                     <div className="flex items-center gap-2">
