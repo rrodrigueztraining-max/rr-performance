@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Dumbbell, Activity, Calendar, FileText, Settings, LogOut } from "lucide-react";
+import { Home, Dumbbell, Activity, Calendar, FileText, Settings, LogOut, BookOpen } from "lucide-react";
 import { auth } from "@/lib/firebase";
 
 import Image from "next/image";
@@ -22,7 +22,7 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         { id: "health", label: "Salud", icon: Activity },
         { id: "calendar", label: "Agenda", icon: Calendar },
         { id: "forms", label: "Formularios", icon: FileText },
-        { id: "resources", label: "Recursos", icon: Settings }, // Changed Icon temporarily as FileText is now forms
+        { id: "resources", label: "Biblioteca", icon: BookOpen },
     ];
 
     return (

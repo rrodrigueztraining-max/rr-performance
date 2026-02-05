@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Dumbbell, Activity, Calendar, FileText } from "lucide-react";
+import { Home, Dumbbell, Activity, Calendar, FileText, BookOpen } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface MobileNavProps {
@@ -20,6 +20,7 @@ export default function MobileNav({ activeTab, setActiveTab }: MobileNavProps) {
         { id: "home", label: "Inicio", icon: Home },
         { id: "workout", label: "Entreno", icon: Dumbbell },
         { id: "health", label: "Salud", icon: Activity },
+        { id: "resources", label: "Biblioteca", icon: BookOpen }, // Added Library
         { id: "calendar", label: "Agenda", icon: Calendar },
         { id: "forms", label: "Forms", icon: FileText },
     ];
