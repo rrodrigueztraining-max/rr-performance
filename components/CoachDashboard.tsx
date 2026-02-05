@@ -53,6 +53,7 @@ export default function CoachDashboard() {
     const [clientStats, setClientStats] = useState<Record<string, ClientDailyStats>>({});
 
     const [loading, setLoading] = useState(true);
+    const [showInactive, setShowInactive] = useState(false);
 
     // 1. Listen to Client Profiles (Users Collection)
     useEffect(() => {
@@ -253,12 +254,27 @@ export default function CoachDashboard() {
 
     // Derived State: Combined Client Data
     const clients = clientsBase
-        .filter(c => c.isActive) // 1. Soft Delete Filter
+        .filter(c => showInactive ? true : c.isActive) // Filter based on toggle
         .map(c => {
             // calculate relative time
+            // calculate relative time
             let relTime = "N/A";
-            if (c.lastActive && c.lastActive.seconds) {
-                const diff = Date.now() - (c.lastActive.seconds * 1000);
+            const lastActive = c.lastActive;
+
+            let lastActiveDate: Date | null = null;
+
+            if (lastActive) {
+                if (lastActive.seconds) {
+                    lastActiveDate = new Date(lastActive.seconds * 1000);
+                } else if (lastActive instanceof Date) {
+                    lastActiveDate = lastActive;
+                } else if (typeof lastActive === 'string') { // ISO string fallback
+                    lastActiveDate = new Date(lastActive);
+                }
+            }
+
+            if (lastActiveDate) {
+                const diff = Date.now() - lastActiveDate.getTime();
                 const minutes = Math.floor(diff / 60000);
                 const hours = Math.floor(minutes / 60);
                 const days = Math.floor(hours / 24);
@@ -404,11 +420,22 @@ export default function CoachDashboard() {
                                 </div>
                             </div>
 
-                            {/* Clients Table */}
                             <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-gray-800 overflow-hidden overflow-x-auto">
                                 <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center">
                                     <h3 className="text-lg font-bold text-white">Estado de los Clientes</h3>
-                                    {/* Optional: Toggle to show inactive? */}
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-bold ${showInactive ? 'text-white' : 'text-gray-500'}`}>
+                                            Ver Inactivos
+                                        </span>
+                                        <button
+                                            onClick={() => setShowInactive(!showInactive)}
+                                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showInactive ? 'bg-[#BC0000]' : 'bg-gray-700'}`}
+                                        >
+                                            <span
+                                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showInactive ? 'translate-x-6' : 'translate-x-1'}`}
+                                            />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-gray-800">
@@ -480,10 +507,10 @@ export default function CoachDashboard() {
                                                             <div className="flex items-center justify-end gap-2">
                                                                 <button
                                                                     onClick={() => setSelectedClient(client)}
-                                                                    className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                                                                    className="px-4 py-2 bg-[#BC0000] text-white hover:bg-red-700 rounded-lg font-bold text-xs uppercase tracking-wider shadow-lg hover:shadow-red-900/40 transition-all flex-1"
                                                                     title="Ver Detalles"
                                                                 >
-                                                                    Edit
+                                                                    Editar Plan
                                                                 </button>
 
                                                                 {/* Toggle Active Button (Soft Delete) */}
