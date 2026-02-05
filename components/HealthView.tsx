@@ -329,10 +329,16 @@ export default function HealthView({ initialTab = 'activity' }: { initialTab?: '
                                 </div>
                             )}
 
-                            {isNative && (
+                            {isNative && hasPermission && (
                                 <p className="text-sm text-gray-500 mb-6 flex items-center gap-2">
                                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
                                     Sincronizado con Salud
+                                </p>
+                            )}
+
+                            {isNative && !hasPermission && (
+                                <p className="text-xs text-[#BC0000] mb-6">
+                                    Requiere permisos de Salud. Pulsa Sincronizar.
                                 </p>
                             )}
 

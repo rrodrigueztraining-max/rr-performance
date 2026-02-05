@@ -1,13 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { PlayCircle, FileText, Download } from "lucide-react";
+import { PlayCircle, FileText, Download, Lock } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { doc, onSnapshot } from "firebase/firestore";
-
-// ... imports
-import { collection, query, orderBy } from "firebase/firestore";
+import { doc, onSnapshot, collection, query, orderBy, where, getDocs } from "firebase/firestore";
 
 interface ResourcesViewProps {
     onPlayVideo?: (url: string) => void;
@@ -16,9 +13,14 @@ interface ResourcesViewProps {
 export default function ResourcesView({ onPlayVideo }: ResourcesViewProps) {
     const { user } = useAuth();
     const [documents, setDocuments] = useState<any[]>([]);
-    const [resources, setResources] = useState<any[]>([]);
 
-    // 1. Fetch User Documents (Private)
+    // Library State
+    const [categories, setCategories] = useState<any[]>([]);
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+    const [resources, setResources] = useState<any[]>([]);
+    const [loadingResources, setLoadingResources] = useState(false);
+
+    // 1. Fetch User Documents (Private Files) - Kept from original
     useEffect(() => {
         if (!user) return;
         const userRef = doc(db, "users", user.uid);
@@ -35,22 +37,78 @@ export default function ResourcesView({ onPlayVideo }: ResourcesViewProps) {
         return () => unsubscribe();
     }, [user]);
 
-    // 2. Fetch Global Resources (Public)
+    // 2. Fetch Categories
     useEffect(() => {
-        const q = query(collection(db, "global_resources"), orderBy("createdAt", "desc"));
+        const q = query(collection(db, "library_categories"), orderBy("name"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            setResources(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const cats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCategories(cats);
+            // Select first category by default if none selected
+            if (cats.length > 0 && !selectedCategoryId) {
+                setSelectedCategoryId(cats[0].id);
+            }
         });
         return () => unsubscribe();
     }, []);
 
-    // Group items by category
-    const groupedResources: Record<string, any[]> = {};
-    resources.forEach(res => {
-        const cat = res.category || "General";
-        if (!groupedResources[cat]) groupedResources[cat] = [];
-        groupedResources[cat].push(res);
-    });
+    // 3. Fetch Video Resources based on Selection & Permissions
+    useEffect(() => {
+        if (!user || !selectedCategoryId) return;
+
+        setLoadingResources(true);
+
+        const fetchVideos = async () => {
+            try {
+                // Strategy: Two queries merged (Public in Cat OR Private allowed in Cat)
+                // Firestore logical OR across different fields is tricky, so parallel queries are safer.
+
+                // Query 1: Public videos in this category
+                const qPublic = query(
+                    collection(db, "global_resources"),
+                    where("categoryId", "==", selectedCategoryId),
+                    where("isPublic", "==", true)
+                );
+
+                // Query 2: Private videos where allowedUserIds contains my UID
+                const qPrivate = query(
+                    collection(db, "global_resources"),
+                    where("categoryId", "==", selectedCategoryId),
+                    where("allowedUserIds", "array-contains", user.uid)
+                );
+
+                const [snapPublic, snapPrivate] = await Promise.all([
+                    getDocs(qPublic),
+                    getDocs(qPrivate)
+                ]);
+
+                // Merge and deduplicate
+                const results = new Map();
+
+                snapPublic.forEach(doc => {
+                    results.set(doc.id, { id: doc.id, ...doc.data() });
+                });
+
+                snapPrivate.forEach(doc => {
+                    results.set(doc.id, { id: doc.id, ...doc.data() });
+                });
+
+                // Sort by createdAt desc (manual sort since we merged)
+                const sorted = Array.from(results.values()).sort((a, b) => {
+                    const tA = a.createdAt?.seconds || 0;
+                    const tB = b.createdAt?.seconds || 0;
+                    return tB - tA;
+                });
+
+                setResources(sorted);
+            } catch (error) {
+                console.error("Error fetching resources:", error);
+            } finally {
+                setLoadingResources(false);
+            }
+        };
+
+        fetchVideos();
+    }, [user, selectedCategoryId]);
 
     const handleVideoClick = (url: string, e: React.MouseEvent) => {
         if (onPlayVideo) {
@@ -60,7 +118,7 @@ export default function ResourcesView({ onPlayVideo }: ResourcesViewProps) {
     };
 
     return (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
             <header>
                 <h2 className="text-3xl font-bold text-white">Biblioteca RR</h2>
                 <p className="text-gray-400">Recursos exclusivos para elevar tu rendimiento.</p>
@@ -101,19 +159,44 @@ export default function ResourcesView({ onPlayVideo }: ResourcesViewProps) {
                 </div>
             )}
 
-            {/* Global Video Categories */}
-            {Object.entries(groupedResources).length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                    Cargando biblioteca de recursos...
-                </div>
-            ) : Object.entries(groupedResources).map(([category, items]) => (
-                <div key={category} className="space-y-4">
+            {/* Categories & Videos */}
+            <div className="space-y-6">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-4">
                     <h3 className="text-xl font-bold text-white border-l-4 border-[#BC0000] pl-3">
-                        {category}
+                        Videos y Clases
                     </h3>
+                </div>
 
+                {/* Categories Tabs */}
+                {categories.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                        {categories.map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setSelectedCategoryId(cat.id)}
+                                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${selectedCategoryId === cat.id
+                                        ? 'bg-[#BC0000] text-white shadow-lg'
+                                        : 'bg-gray-900 text-gray-400 hover:text-white hover:bg-gray-800'
+                                    }`}
+                            >
+                                {cat.name}
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-gray-500 text-sm">Cargando categorías...</div>
+                )}
+
+                {/* Videos Grid */}
+                {loadingResources ? (
+                    <div className="py-12 text-center text-gray-500 animate-pulse">Cargando videos...</div>
+                ) : resources.length === 0 ? (
+                    <div className="py-12 text-center text-gray-500 border border-dashed border-gray-800 rounded-xl">
+                        No hay videos disponibles en esta categoría.
+                    </div>
+                ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {items.map((video) => (
+                        {resources.map((video) => (
                             <div
                                 key={video.id}
                                 onClick={(e) => handleVideoClick(video.videoUrl, e)}
@@ -131,9 +214,16 @@ export default function ResourcesView({ onPlayVideo }: ResourcesViewProps) {
                                 {/* Content */}
                                 <div className="absolute bottom-0 left-0 p-4 w-full">
                                     <h4 className="text-white font-bold text-sm line-clamp-2 leading-tight">{video.title}</h4>
-                                    <span className="text-xs text-gray-400 mt-1 block">
-                                        {video.createdAt?.seconds ? new Date(video.createdAt.seconds * 1000).toLocaleDateString() : ''}
-                                    </span>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-xs text-gray-400 block">
+                                            {video.createdAt?.seconds ? new Date(video.createdAt.seconds * 1000).toLocaleDateString() : ''}
+                                        </span>
+                                        {!video.isPublic && (
+                                            <span className="bg-[#BC0000]/20 text-[#BC0000] text-[10px] px-1.5 py-0.5 rounded border border-[#BC0000]/20 flex items-center gap-0.5">
+                                                <Lock className="w-3 h-3" /> Privado
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Play Overlay */}
@@ -143,8 +233,8 @@ export default function ResourcesView({ onPlayVideo }: ResourcesViewProps) {
                             </div>
                         ))}
                     </div>
-                </div>
-            ))}
+                )}
+            </div>
         </div>
     );
 }

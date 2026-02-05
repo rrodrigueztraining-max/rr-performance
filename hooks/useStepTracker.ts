@@ -23,17 +23,16 @@ export const useStepTracker = () => {
                 write: []
             });
 
-            // Check authorization status check might be needed or we assume success if no error
-            // The result contains arrays of authorized types
-            // result.readAuthorized ('steps' in ...)
+            // Verificamos si realmente nos dieron permiso
+            const stepsAuthorized = result.readAuthorized.includes('steps');
 
-            // For now, assuming success if no throw
-            setHasPermission(true);
+            setHasPermission(stepsAuthorized);
             setIsLoading(false);
-            return true;
+            return stepsAuthorized;
         } catch (err: any) {
             console.error("Permission request failed", err);
             setError(err.message || "Error solicitando permisos");
+            setHasPermission(false);
             setIsLoading(false);
             return false;
         }
