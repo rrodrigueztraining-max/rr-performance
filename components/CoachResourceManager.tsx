@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { db, storage } from "@/lib/firebase";
-import { collection, addDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, where, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { Trash2, Upload, Video, Image as ImageIcon, Plus, PlayCircle, Loader2, Users, Globe, Lock, FolderPlus } from "lucide-react";
+import { Trash2, Upload, Video, Image as ImageIcon, Plus, PlayCircle, Loader2, Users, Globe, Lock, FolderPlus, Pencil, X } from "lucide-react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
@@ -27,6 +27,10 @@ export default function CoachResourceManager() {
     const [isPublic, setIsPublic] = useState(true);
     const [allowedUserIds, setAllowedUserIds] = useState<string[]>([]);
 
+    // Edit Mode State
+    const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
+    const isEditing = !!editingResourceId;
+
     const [videoFile, setVideoFile] = useState<File | null>(null);
     const [thumbFile, setThumbFile] = useState<File | null>(null);
 
@@ -36,6 +40,7 @@ export default function CoachResourceManager() {
 
     const ffmpegRef = useRef(new FFmpeg());
     const [ffmpegLoaded, setFfmpegLoaded] = useState(false);
+    const formRef = useRef<HTMLDivElement>(null);
 
     // Initialize FFmpeg
     const loadFfmpeg = async () => {
@@ -66,18 +71,17 @@ export default function CoachResourceManager() {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const cats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCategories(cats);
-            if (cats.length > 0 && !categoryId) {
+            if (cats.length > 0 && !categoryId && !isEditing) {
                 setCategoryId(cats[0].id);
             }
         });
         return () => unsubscribe();
-    }, []);
+    }, [isEditing]); // Dep changed to avoid overwriting category during edit
 
     // 2. Fetch Clients
     useEffect(() => {
         const fetchClients = async () => {
             try {
-                // Query all users, client-side filter is fine for this list size usually
                 const q = query(collection(db, "users"));
                 const snapshot = await getDocs(q);
                 const loadedClients: any[] = [];
@@ -149,9 +153,38 @@ export default function CoachResourceManager() {
         return new Blob([data as any], { type: "video/mp4" });
     };
 
-    const handleUpload = async () => {
-        if (!title || !videoFile || !thumbFile || !categoryId) {
-            alert("Por favor completa el título, selecciona categoría y ambos archivos.");
+    const handleEdit = (resource: any) => {
+        setEditingResourceId(resource.id);
+        setTitle(resource.title);
+        setCategoryId(resource.categoryId || "");
+        setIsPublic(resource.isPublic);
+        setAllowedUserIds(resource.allowedUserIds || []);
+        setVideoFile(null); // Reset files, we only update if user selects new ones
+        setThumbFile(null);
+
+        // Scroll to form
+        formRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const handleCancelEdit = () => {
+        setEditingResourceId(null);
+        setTitle("");
+        // Reset category to first available
+        if (categories.length > 0) setCategoryId(categories[0].id);
+        setIsPublic(true);
+        setAllowedUserIds([]);
+        setVideoFile(null);
+        setThumbFile(null);
+    };
+
+    const handleSave = async () => {
+        if (!title || !categoryId) {
+            alert("Por favor completa el título y selecciona la categoría.");
+            return;
+        }
+
+        if (!isEditing && (!videoFile || !thumbFile)) {
+            alert("Para crear un nuevo video, debes subir ambos archivos.");
             return;
         }
 
@@ -162,52 +195,69 @@ export default function CoachResourceManager() {
 
         setUploading(true);
         try {
-            // Compress logic
-            let fileToUpload: File | Blob = videoFile;
-            const isMov = videoFile.name.toLowerCase().endsWith('.mov') || videoFile.type === 'video/quicktime';
-            if (isMov || videoFile.size > 5 * 1024 * 1024) {
-                try {
-                    fileToUpload = await compressVideo(videoFile);
-                } catch (e) {
-                    console.error("Optim failed", e);
-                    setStatusText("Fallo optimización, subiendo original...");
+            let videoUrl = "";
+            let thumbUrl = "";
+
+            // 1. Handle Video Upload (if present)
+            if (videoFile) {
+                // Compress logic
+                let fileToUpload: File | Blob = videoFile;
+                const isMov = videoFile.name.toLowerCase().endsWith('.mov') || videoFile.type === 'video/quicktime';
+                if (isMov || videoFile.size > 5 * 1024 * 1024) {
+                    try {
+                        fileToUpload = await compressVideo(videoFile);
+                    } catch (e) {
+                        console.error("Optim failed", e);
+                        setStatusText("Fallo optimización, subiendo original...");
+                    }
                 }
+                setStatusText("Subiendo video...");
+                const videoPath = `resources/videos/${Date.now()}_compressed.mp4`;
+                const videoSnap = await uploadBytes(ref(storage, videoPath), fileToUpload);
+                videoUrl = await getDownloadURL(videoSnap.ref);
             }
 
-            setStatusText("Subiendo archivos...");
+            // 2. Handle Thumbnail Upload (if present)
+            if (thumbFile) {
+                setStatusText("Subiendo portada...");
+                const thumbPath = `resources/thumbnails/${Date.now()}_${thumbFile.name}`;
+                const thumbSnap = await uploadBytes(ref(storage, thumbPath), thumbFile);
+                thumbUrl = await getDownloadURL(thumbSnap.ref);
+            }
 
-            // Uploads
-            const videoPath = `resources/videos/${Date.now()}_compressed.mp4`;
-            const videoSnap = await uploadBytes(ref(storage, videoPath), fileToUpload);
-            const videoUrl = await getDownloadURL(videoSnap.ref);
-
-            const thumbPath = `resources/thumbnails/${Date.now()}_${thumbFile.name}`;
-            const thumbSnap = await uploadBytes(ref(storage, thumbPath), thumbFile);
-            const thumbUrl = await getDownloadURL(thumbSnap.ref);
-
-            // Firestore
+            // 3. Prepare Payload
             const selectedCat = categories.find(c => c.id === categoryId);
-
-            await addDoc(collection(db, "global_resources"), {
+            const commonData = {
                 title,
                 categoryId,
-                category: selectedCat ? selectedCat.name : "General", // Legacy/Display support
-                videoUrl,
-                thumbnailUrl: thumbUrl,
+                category: selectedCat ? selectedCat.name : "General",
                 isPublic,
                 allowedUserIds: isPublic ? [] : allowedUserIds,
-                createdAt: serverTimestamp(),
-            });
+            };
+
+            if (isEditing && editingResourceId) {
+                // UPDATE
+                const updateData: any = { ...commonData };
+                if (videoUrl) updateData.videoUrl = videoUrl;
+                if (thumbUrl) updateData.thumbnailUrl = thumbUrl;
+
+                await updateDoc(doc(db, "global_resources", editingResourceId), updateData);
+                alert("¡Recurso actualizado!");
+            } else {
+                // CREATE
+                await addDoc(collection(db, "global_resources"), {
+                    ...commonData,
+                    videoUrl, // guaranteed to exist by validation check above
+                    thumbnailUrl: thumbUrl,
+                    createdAt: serverTimestamp(),
+                });
+                alert("¡Recurso creado!");
+            }
 
             // Reset
-            setTitle("");
-            setVideoFile(null);
-            setThumbFile(null);
-            setAllowedUserIds([]);
-            setIsPublic(true);
+            handleCancelEdit();
             setProgress(0);
             setStatusText("");
-            alert("¡Recurso subido exitosamente!");
 
         } catch (error: any) {
             console.error("Upload Error:", error);
@@ -220,12 +270,12 @@ export default function CoachResourceManager() {
     };
 
     const handleDelete = async (id: string, videoUrl: string, thumbnailUrl: string) => {
-        if (!confirm("¿Eliminar recurso irreversiblemente? This is irreversible.")) return;
+        if (!confirm("¿Eliminar recurso irreversiblemente?")) return;
         try {
             if (videoUrl) await deleteObject(ref(storage, videoUrl)).catch(console.error);
             if (thumbnailUrl) await deleteObject(ref(storage, thumbnailUrl)).catch(console.error);
             await deleteDoc(doc(db, "global_resources", id));
-            alert("Recurso eliminado.");
+            // alert("Recurso eliminado."); 
         } catch (e) {
             console.error(e);
             alert("Error al eliminar.");
@@ -246,12 +296,22 @@ export default function CoachResourceManager() {
                 <p className="text-gray-400 text-sm">Gestiona videos, categorías y permisos de acceso para tus clientes.</p>
             </div>
 
-            {/* Upload Form */}
-            <div className={`bg-black/40 border ${uploading ? 'border-[#BC0000] shadow-[0_0_15px_rgba(188,0,0,0.2)]' : 'border-gray-800'} rounded-xl p-6 transition-all`}>
-                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                    {uploading ? <Loader2 className="animate-spin text-[#BC0000]" /> : <Plus className="text-[#BC0000]" />}
-                    {uploading ? statusText : "Nuevo Video"}
-                </h3>
+            {/* Upload/Edit Form */}
+            <div ref={formRef} className={`bg-black/40 border ${uploading ? 'border-[#BC0000] shadow-[0_0_15px_rgba(188,0,0,0.2)]' : isEditing ? 'border-[#BC0000] bg-[#BC0000]/5' : 'border-gray-800'} rounded-xl p-6 transition-all`}>
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        {uploading ? <Loader2 className="animate-spin text-[#BC0000]" /> : isEditing ? <Pencil className="text-[#BC0000]" /> : <Plus className="text-[#BC0000]" />}
+                        {uploading ? statusText : isEditing ? "Editar Video" : "Nuevo Video"}
+                    </h3>
+                    {isEditing && (
+                        <button
+                            onClick={handleCancelEdit}
+                            className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1"
+                        >
+                            <X className="w-4 h-4" /> Cancelar
+                        </button>
+                    )}
+                </div>
 
                 {uploading && (
                     <div className="mb-6">
@@ -333,9 +393,11 @@ export default function CoachResourceManager() {
                                     onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
                                     className="hidden"
                                 />
-                                <label htmlFor="video-upload" className={`block p-4 border-2 border-dashed rounded-lg cursor-pointer text-center transition-all ${videoFile ? 'border-[#BC0000] bg-[#BC0000]/10' : 'border-gray-800 hover:border-gray-600'}`}>
+                                <label htmlFor="video-upload" className={`block p-4 border-2 border-dashed rounded-lg cursor-pointer text-center transition-all ${videoFile ? 'border-[#BC0000] bg-[#BC0000]/10' : isEditing ? 'border-gray-700 bg-gray-900/50 hover:bg-gray-900' : 'border-gray-800 hover:border-gray-600'}`}>
                                     <Video className={`w-6 h-6 mx-auto mb-2 ${videoFile ? 'text-[#BC0000]' : 'text-gray-500'}`} />
-                                    <div className="text-xs font-bold text-white truncate">{videoFile ? videoFile.name : "Video"}</div>
+                                    <div className="text-xs font-bold text-white truncate">
+                                        {videoFile ? videoFile.name : isEditing ? "Mantener Video" : "Video"}
+                                    </div>
                                 </label>
                             </div>
 
@@ -348,9 +410,11 @@ export default function CoachResourceManager() {
                                     onChange={(e) => setThumbFile(e.target.files?.[0] || null)}
                                     className="hidden"
                                 />
-                                <label htmlFor="thumb-upload" className={`block p-4 border-2 border-dashed rounded-lg cursor-pointer text-center transition-all ${thumbFile ? 'border-[#BC0000] bg-[#BC0000]/10' : 'border-gray-800 hover:border-gray-600'}`}>
+                                <label htmlFor="thumb-upload" className={`block p-4 border-2 border-dashed rounded-lg cursor-pointer text-center transition-all ${thumbFile ? 'border-[#BC0000] bg-[#BC0000]/10' : isEditing ? 'border-gray-700 bg-gray-900/50 hover:bg-gray-900' : 'border-gray-800 hover:border-gray-600'}`}>
                                     <ImageIcon className={`w-6 h-6 mx-auto mb-2 ${thumbFile ? 'text-[#BC0000]' : 'text-gray-500'}`} />
-                                    <div className="text-xs font-bold text-white truncate">{thumbFile ? thumbFile.name : "Portada"}</div>
+                                    <div className="text-xs font-bold text-white truncate">
+                                        {thumbFile ? thumbFile.name : isEditing ? "Mantener Portada" : "Portada"}
+                                    </div>
                                 </label>
                             </div>
                         </div>
@@ -418,14 +482,14 @@ export default function CoachResourceManager() {
 
                 <div className="mt-8 flex justify-end">
                     <button
-                        onClick={handleUpload}
+                        onClick={handleSave}
                         disabled={uploading}
                         className={`px-8 py-3 bg-[#BC0000] text-white font-bold rounded-lg hover:bg-red-700 transition-all flex items-center gap-2 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         {uploading ? (
                             <><Loader2 className="w-5 h-5 animate-spin" /> Procesando...</>
                         ) : (
-                            <><Upload className="w-5 h-5" /> Publicar Recurso</>
+                            <><Upload className="w-5 h-5" /> {isEditing ? "Guardar Cambios" : "Publicar Recurso"}</>
                         )}
                     </button>
                 </div>
@@ -442,7 +506,7 @@ export default function CoachResourceManager() {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {resources.map((res) => (
-                            <div key={res.id} className="group relative bg-gray-900 border border-gray-800 rounded-xl overflow-hidden hover:border-[#BC0000] transition-all">
+                            <div key={res.id} className={`group relative bg-gray-900 border rounded-xl overflow-hidden transition-all hover:border-[#BC0000] ${editingResourceId === res.id ? 'border-[#BC0000] ring-1 ring-[#BC0000]' : 'border-gray-800'}`}>
                                 {/* Thumbnail */}
                                 <div className="aspect-video relative bg-black">
                                     <img src={res.thumbnailUrl} alt={res.title} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
@@ -455,10 +519,17 @@ export default function CoachResourceManager() {
                                             </span>
                                         )}
                                     </div>
-                                    <div className="absolute top-2 right-2">
+                                    <div className="absolute top-2 right-2 flex gap-2">
+                                        <button
+                                            onClick={() => handleEdit(res)}
+                                            className="p-2 bg-gray-900/80 text-white rounded-full hover:bg-[#BC0000] transition-colors"
+                                            title="Editar"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
                                         <button
                                             onClick={() => handleDelete(res.id, res.videoUrl, res.thumbnailUrl)}
-                                            className="p-2 bg-red-900/80 text-white rounded-full hover:bg-red-600 transition-colors"
+                                            className="p-2 bg-gray-900/80 text-white rounded-full hover:bg-red-600 transition-colors"
                                             title="Eliminar"
                                         >
                                             <Trash2 className="w-4 h-4" />
