@@ -90,6 +90,48 @@ export default function CoachDashboard() {
         return () => unsubscribe();
     }, []);
 
+    // 2. Listen to Daily Stats for EACH client
+    useEffect(() => {
+        if (clientsBase.length === 0) return;
+
+        const today = new Date().toISOString().split('T')[0];
+        const unsubscribers: (() => void)[] = [];
+
+        clientsBase.forEach(client => {
+            const statsRef = doc(db, "users", client.id, "daily_stats", today);
+
+            const unsub = onSnapshot(statsRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const hours = data.sleep_hours ?? 0;
+                    const h = Math.floor(hours);
+                    const m = Math.round((hours - h) * 60);
+
+                    setClientStats(prev => ({
+                        ...prev,
+                        [client.id]: {
+                            steps: data.steps ?? 0,
+                            sleep_hours: hours,
+                            sleep_duration: hours > 0 ? `${h}h ${m}m` : "0h 0m"
+                        }
+                    }));
+                } else {
+                    // Initialize empty if no doc yet
+                    setClientStats(prev => ({
+                        ...prev,
+                        [client.id]: { steps: 0, sleep_hours: 0, sleep_duration: "0h 0m" }
+                    }));
+                }
+            });
+            unsubscribers.push(unsub);
+        });
+
+        // Cleanup all listeners on unmount or when clients list changes
+        return () => {
+            unsubscribers.forEach(unsub => unsub());
+        };
+    }, [clientsBase]);
+
     // 3. Listen to Active Workouts for EACH client to determine status
     const [clientWorkouts, setClientWorkouts] = useState<Record<string, string>>({}); // clientId -> status
 
