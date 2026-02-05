@@ -427,11 +427,7 @@ export default function CoachDashboard() {
                         <FormBuilder />
                     ) : (
                         <>
-                            <div className="flex justify-end">
-                                <button className="px-4 py-2 bg-[#BC0000] text-white rounded-lg font-bold text-sm shadow-[0_0_10px_rgba(188,0,0,0.3)] hover:bg-red-700 transition-all">
-                                    + Nuevo Cliente
-                                </button>
-                            </div>
+
 
                             {/* Stats Overview */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
