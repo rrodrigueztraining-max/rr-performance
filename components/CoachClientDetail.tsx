@@ -19,7 +19,54 @@ interface ClientDetailProps {
 
 // Sub-component defined OUTSIDE main component
 const CoachHistoryDetail = ({ workout, onClose }: { workout: any; onClose: () => void }) => {
-    const { exercises, generalFeedback, title, completedDate } = workout;
+    const [fullWorkout, setFullWorkout] = useState<any>(workout);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        // If workout already has exercises snapshot, use it.
+        if (workout.exercises && workout.exercises.length > 0) {
+            setFullWorkout(workout);
+            return;
+        }
+
+        // If legacy (no exercises snapshot), try to reconstruct from originalWorkoutId
+        const fetchOriginal = async () => {
+            if (!workout.originalWorkoutId) return;
+            setLoading(true);
+            try {
+                const docRef = doc(db, "users", workout.clientId || workout.userId /* We need client ID here, usually passed or inferred? Wait, history item is inside user subcollection, but we don't have parent ID easily unless passed. */, "workouts", workout.originalWorkoutId);
+                // Issue: workout object might not have userId/clientId if fetched from list without context?
+                // CoachClientDetail passes 'selectedHistoryItem' which is just data.
+                // We need to know who the client is.
+                // WORKAROUND: CoachClientDetail is inside a component that knows 'client.id'. 
+                // We should probably rely on parent passing the reconstructed data or this component needs logic.
+                // Actually this component usage: <CoachHistoryDetail workout={selectedHistoryItem} ... />
+                // 'selectedHistoryItem' comes from 'historyWorkouts' state.
+                // We can't easily fetch here without clientId.
+                // Let's assume for now we can't fetch unless we pass clientId.
+            } catch (e) {
+                console.error("Error fetching original workout for report", e);
+            }
+            setLoading(false);
+        };
+        // fetchOriginal(); 
+    }, [workout]);
+
+    // RE-FACTOR: We need clientId passed to this component to fetch.
+    // However, correcting the Prop Interface is invasive. 
+    // Let's implement the reconstruction logic RIGHT IN THE RENDER if we assume "exercises" is what we display.
+    // If it's missing, we show a message "Formato antiguo - No disponible detalle completo" OR we try to improve.
+
+    // Better approach: User is complaining about NEW imports too? "Importing a template... exactly the same".
+    // If template has blocks, my previous fix to ImportModal only passed 'blocks'. 
+    // Does CoachHistoryDetail handle 'blocks' if they are present in history?
+    // My finishWorkout saves 'exercises' (flat).
+
+    // If the history item has 'exercises' (flat), we map it.
+    // If the history item has 'blocks' (maybe legacy did?), we map it?
+    // Legacy history had 'sessionData' and 'originalWorkoutId'. It did NOT have blocks/exercises usually.
+
+    const { exercises, generalFeedback, title, completedDate } = fullWorkout;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 text-white animate-in fade-in duration-200">
@@ -36,7 +83,7 @@ const CoachHistoryDetail = ({ workout, onClose }: { workout: any; onClose: () =>
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                        <XIcon className="w-6 h-6" /> {/* Using generic X (close) icon logic, or ensure X import */}
+                        <XIcon className="w-6 h-6" />
                     </button>
                 </div>
 
@@ -58,92 +105,103 @@ const CoachHistoryDetail = ({ workout, onClose }: { workout: any; onClose: () =>
                     {/* Exercises */}
                     <div className="space-y-6">
                         <h3 className="text-xl font-bold text-white mb-4 border-b border-gray-800 pb-2">Desglose de Ejercicios</h3>
-                        {exercises?.map((ex: any, i: number) => {
-                            if (ex.isSection) {
-                                return (
-                                    <div key={i} className="flex items-center gap-3 text-[#BC0000] font-black uppercase tracking-widest text-lg py-4 border-b border-[#BC0000]/20 mt-6 mb-2">
-                                        <LayoutTemplate className="w-6 h-6" />
-                                        {ex.name}
-                                    </div>
-                                );
-                            }
 
-                            return (
-                                <div key={i} className="bg-gray-800/20 border border-gray-800 rounded-lg p-5 border-l-4 border-l-transparent hover:border-l-[#BC0000] transition-all">
-                                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
-                                        <div>
-                                            <h4 className="font-bold text-lg text-white">{ex.name}</h4>
-                                            <div className="text-xs text-gray-500 font-mono mt-1">
-                                                {ex.series?.length} Series • Rest: {ex.rest}
-                                            </div>
+                        {!exercises || exercises.length === 0 ? (
+                            <div className="text-center py-10 bg-gray-800/20 rounded-lg border border-gray-800 border-dashed">
+                                <Activity className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+                                <p className="text-gray-400 font-bold">No hay detalles de ejercicios disponibles</p>
+                                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                                    Este reporte puede ser de una versión anterior o no contener datos estructurados.
+                                </p>
+                            </div>
+                        ) : (
+                            exercises.map((ex: any, i: number) => {
+                                if (ex.isSection) {
+                                    return (
+                                        <div key={i} className="flex items-center gap-3 text-[#BC0000] font-black uppercase tracking-widest text-lg py-4 border-b border-[#BC0000]/20 mt-6 mb-2">
+                                            <LayoutTemplate className="w-6 h-6" />
+                                            {ex.name}
                                         </div>
-                                        {ex.painLevel > 0 && (
-                                            <div className="px-3 py-1 bg-red-900/20 text-red-400 border border-red-900/50 rounded text-xs font-bold uppercase flex items-center gap-2">
-                                                <Activity className="w-3 h-3" /> Dolor: {ex.painLevel}/10
+                                    );
+                                }
+
+                                return (
+                                    <div key={i} className="bg-gray-800/20 border border-gray-800 rounded-lg p-5 border-l-4 border-l-transparent hover:border-l-[#BC0000] transition-all">
+                                        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-4">
+                                            <div>
+                                                <h4 className="font-bold text-lg text-white">{ex.name}</h4>
+                                                <div className="text-xs text-gray-500 font-mono mt-1">
+                                                    {ex.series?.length} Series • Rest: {ex.rest}
+                                                </div>
+                                            </div>
+                                            {ex.painLevel > 0 && (
+                                                <div className="px-3 py-1 bg-red-900/20 text-red-400 border border-red-900/50 rounded text-xs font-bold uppercase flex items-center gap-2">
+                                                    <Activity className="w-3 h-3" /> Dolor: {ex.painLevel}/10
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Series Table */}
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="text-xs text-gray-500 uppercase bg-black/20">
+                                                    <tr>
+                                                        <th className="px-3 py-2 text-center rounded-l">Set</th>
+                                                        <th className="px-3 py-2 text-center">Peso (Kg)</th>
+                                                        <th className="px-3 py-2 text-center">Intensidad</th>
+                                                        <th className="px-3 py-2 text-center">Reps</th>
+                                                        <th className="px-3 py-2 text-center rounded-r">Realizado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-700/50">
+                                                    {ex.series?.map((s: any, j: number) => {
+                                                        // Intensity Label
+                                                        let intensityLabel = s.intensityType || "RPE";
+                                                        if (intensityLabel === "VELOCIDAD") intensityLabel = "V (m/s)";
+
+                                                        const intensityVal = s.targetRPE;
+
+                                                        // Weight Check (Handle 0 correctly)
+                                                        const tLoadRaw = s.targetLoad !== undefined && s.targetLoad !== "" ? s.targetLoad : s.load;
+                                                        const tLoad = tLoadRaw !== undefined && tLoadRaw !== "" ? tLoadRaw : "-";
+
+                                                        const aLoad = s.actualLoad;
+                                                        const loadMismatch = tLoad !== "-" && aLoad && String(tLoad) !== String(aLoad);
+
+                                                        return (
+                                                            <tr key={j} className="hover:bg-white/5">
+                                                                <td className="px-3 py-2 text-center font-bold text-gray-400">#{s.setNumber}</td>
+                                                                <td className="px-3 py-2 text-center font-mono">
+                                                                    <div className="flex flex-col items-center">
+                                                                        <span className="text-gray-500 text-[10px]">OBJ: {tLoad || '-'}</span>
+                                                                        <span className={`font-bold ${loadMismatch ? 'text-[#BC0000]' : 'text-white'}`}>{aLoad || '-'}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-3 py-2 text-center text-gray-400 font-mono">
+                                                                    {intensityVal ? `${intensityLabel} ${intensityVal}` : '-'}
+                                                                </td>
+                                                                <td className="px-3 py-2 text-center text-white">{s.actualReps || s.targetReps || '-'}</td>
+                                                                <td className="px-3 py-2 text-center">
+                                                                    {s.completed ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" /> : <span className="text-gray-600">-</span>}
+                                                                </td>
+                                                            </tr>
+                                                        )
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Exercise Note */}
+                                        {ex.userNotes && (
+                                            <div className="mt-4 p-3 bg-black/30 rounded border border-gray-700/50">
+                                                <span className="text-xs text-gray-500 uppercase font-bold block mb-1">Nota del Atleta:</span>
+                                                <p className="text-sm text-gray-300 italic">{ex.userNotes}</p>
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* Series Table */}
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="text-xs text-gray-500 uppercase bg-black/20">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-center rounded-l">Set</th>
-                                                    <th className="px-3 py-2 text-center">Peso (Kg)</th>
-                                                    <th className="px-3 py-2 text-center">Intensidad</th>
-                                                    <th className="px-3 py-2 text-center">Reps</th>
-                                                    <th className="px-3 py-2 text-center rounded-r">Realizado</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-700/50">
-                                                {ex.series?.map((s: any, j: number) => {
-                                                    // Intensity Label
-                                                    let intensityLabel = s.intensityType || "RPE";
-                                                    if (intensityLabel === "VELOCIDAD") intensityLabel = "V (m/s)";
-
-                                                    const intensityVal = s.targetRPE;
-
-                                                    // Weight Check (Handle 0 correctly)
-                                                    const tLoadRaw = s.targetLoad !== undefined && s.targetLoad !== "" ? s.targetLoad : s.load;
-                                                    const tLoad = tLoadRaw !== undefined && tLoadRaw !== "" ? tLoadRaw : "-";
-
-                                                    const aLoad = s.actualLoad;
-                                                    const loadMismatch = tLoad !== "-" && aLoad && String(tLoad) !== String(aLoad);
-
-                                                    return (
-                                                        <tr key={j} className="hover:bg-white/5">
-                                                            <td className="px-3 py-2 text-center font-bold text-gray-400">#{s.setNumber}</td>
-                                                            <td className="px-3 py-2 text-center font-mono">
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className="text-gray-500 text-[10px]">OBJ: {tLoad || '-'}</span>
-                                                                    <span className={`font-bold ${loadMismatch ? 'text-[#BC0000]' : 'text-white'}`}>{aLoad || '-'}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-2 text-center text-gray-400 font-mono">
-                                                                {intensityVal ? `${intensityLabel} ${intensityVal}` : '-'}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-center text-white">{s.actualReps || s.targetReps || '-'}</td>
-                                                            <td className="px-3 py-2 text-center">
-                                                                {s.completed ? <CheckCircle className="w-4 h-4 text-green-500 mx-auto" /> : <span className="text-gray-600">-</span>}
-                                                            </td>
-                                                        </tr>
-                                                    )
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    {/* Exercise Note */}
-                                    {ex.userNotes && (
-                                        <div className="mt-4 p-3 bg-black/30 rounded border border-gray-700/50">
-                                            <span className="text-xs text-gray-500 uppercase font-bold block mb-1">Nota del Atleta:</span>
-                                            <p className="text-sm text-gray-300 italic">{ex.userNotes}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             </div>

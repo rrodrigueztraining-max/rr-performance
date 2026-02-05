@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, orderBy, onSnapshot, limit, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, limit, getDocs, doc, getDoc } from "firebase/firestore";
 import { Copy, Clock, LayoutTemplate, Briefcase, Loader2, X, Calendar, CheckCircle } from "lucide-react";
 
 interface ImportWorkoutModalProps {
@@ -51,21 +51,35 @@ export default function ImportWorkoutModal({ clientId, onImport, onClose }: Impo
         fetchData();
     }, [clientId]);
 
-    const handleSelect = (item: any, type: 'template' | 'history') => {
+    const handleSelect = async (item: any, type: 'template' | 'history') => {
         // Prepare data for import
         const title = item.name || item.title || "Sesión Importada";
 
         // Handle both flat exercises and block-based structures
-        const blocks = item.blocks || [];
-        const exercises = item.exercises || [];
+        let blocks = item.blocks || [];
+        let exercises = item.exercises || [];
 
-        // If neither exists, we might need to look deeper or it's empty
-        // But logic in WorkoutEditor will handle:
-        // 1. If 'blocks' provided -> Import blocks
-        // 2. If 'exercises' provided -> Import exercises into one block
+        // Legacy Handling: If history item has NO exercises/blocks but has originalWorkoutId
+        if (type === 'history' && (!blocks || blocks.length === 0) && (!exercises || exercises.length === 0) && item.originalWorkoutId) {
+            try {
+                setLoading(true);
+                const originalRef = doc(db, "users", clientId, "workouts", item.originalWorkoutId);
+                const originalSnap = await getDoc(originalRef);
+
+                if (originalSnap.exists()) {
+                    const originalData = originalSnap.data();
+                    if (originalData.blocks) blocks = originalData.blocks;
+                    if (originalData.exercises) exercises = originalData.exercises;
+                }
+            } catch (e) {
+                console.error("Error fetching legacy original:", e);
+                alert("No se pudo recuperar la estructura de esta sesión antigua.");
+            }
+        }
 
         onImport({ title, blocks, exercises });
         onClose();
+        setLoading(false);
     };
 
     return (
@@ -126,7 +140,9 @@ export default function ImportWorkoutModal({ clientId, onImport, onClose }: Impo
                                                 <div>
                                                     <h4 className="font-bold text-white text-lg group-hover:text-[#BC0000] transition-colors">{t.name}</h4>
                                                     <div className="flex items-center gap-4 text-xs text-gray-400 mt-1">
-                                                        <span className="bg-[#BC0000]/10 text-[#BC0000] px-2 py-0.5 rounded font-bold uppercase">{t.exercises?.length || 0} Ejercicios</span>
+                                                        <span className="bg-[#BC0000]/10 text-[#BC0000] px-2 py-0.5 rounded font-bold uppercase">
+                                                            {(t.exercises?.length || 0) + (t.blocks?.reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0) || 0)} Ejercicios
+                                                        </span>
                                                         <span className="truncate max-w-[250px]">{t.description}</span>
                                                     </div>
                                                 </div>
@@ -161,7 +177,9 @@ export default function ImportWorkoutModal({ clientId, onImport, onClose }: Impo
                                                         <span className="flex items-center gap-1 text-green-500">
                                                             <CheckCircle className="w-3 h-3" /> Completado
                                                         </span>
-                                                        <span>{h.exercises?.length || 0} Ejercicios</span>
+                                                        <span>
+                                                            {(h.exercises?.length || 0) + (h.blocks?.reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0) || 0)} Ejercicios
+                                                        </span>
                                                         <span className="truncate max-w-[200px]">RPE: {h.feedback?.sessionRPE || 'N/A'}</span>
                                                     </div>
                                                 </div>
