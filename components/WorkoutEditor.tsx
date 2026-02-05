@@ -79,25 +79,48 @@ export default function WorkoutEditor({ clientId, onClose, initialData, workoutI
         }
     }, [workoutId]);
 
-    const handleImport = (data: { title: string; exercises: any[] }) => {
-        // Deep copy exercises with new IDs
-        const newExercises = data.exercises.map((ex: any) => ({
-            ...ex,
-            id: `imp_ex${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            series: ex.series?.map((s: any) => ({ ...s })) || []
-        }));
+    const handleImport = (data: { title: string; exercises?: any[]; blocks?: any[] }) => {
+        const newBlocks: Block[] = [];
 
-        // Create a new Block
-        const newBlock: Block = {
-            id: `imp_blk${Date.now()}`,
-            title: `COPIA DE: ${data.title}`,
-            exercises: newExercises
-        };
+        // Case A: Import Blocks (Preferred for Templates/Full Plans)
+        if (data.blocks && data.blocks.length > 0) {
+            data.blocks.forEach((block: any) => {
+                const newB: Block = {
+                    id: `imp_blk${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    title: block.title || "DÍA IMPORTADO",
+                    exercises: (block.exercises || []).map((ex: any) => ({
+                        ...ex,
+                        id: `imp_ex${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                        series: (ex.series || []).map((s: any) => ({ ...s }))
+                    }))
+                };
+                newBlocks.push(newB);
+            });
+        }
+        // Case B: Import Flat Exercises (History Snapshot or simple list)
+        else if (data.exercises && data.exercises.length > 0) {
+            const newExercises = data.exercises.map((ex: any) => ({
+                ...ex,
+                id: `imp_ex${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                series: ex.series?.map((s: any) => ({ ...s })) || []
+            }));
 
-        setBlocks([...blocks, newBlock]);
+            newBlocks.push({
+                id: `imp_blk${Date.now()}`,
+                title: `COPIA DE: ${data.title}`,
+                exercises: newExercises
+            });
+        }
 
-        // Auto-expand the new block
-        setExpandedBlocks(prev => ({ ...prev, [newBlock.id]: true }));
+        if (newBlocks.length > 0) {
+            setBlocks([...blocks, ...newBlocks]);
+
+            // Auto expand new blocks
+            const newExpanded = { ...expandedBlocks };
+            newBlocks.forEach(b => { newExpanded[b.id] = true; });
+            setExpandedBlocks(newExpanded);
+        }
+
         setShowImportModal(false);
     };
 

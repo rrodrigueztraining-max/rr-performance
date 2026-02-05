@@ -7,7 +7,7 @@ import { Copy, Clock, LayoutTemplate, Briefcase, Loader2, X, Calendar, CheckCirc
 
 interface ImportWorkoutModalProps {
     clientId: string;
-    onImport: (data: { title: string; exercises: any[] }) => void;
+    onImport: (data: { title: string; exercises?: any[]; blocks?: any[] }) => void;
     onClose: () => void;
 }
 
@@ -54,8 +54,17 @@ export default function ImportWorkoutModal({ clientId, onImport, onClose }: Impo
     const handleSelect = (item: any, type: 'template' | 'history') => {
         // Prepare data for import
         const title = item.name || item.title || "Sesión Importada";
+
+        // Handle both flat exercises and block-based structures
+        const blocks = item.blocks || [];
         const exercises = item.exercises || [];
-        onImport({ title, exercises });
+
+        // If neither exists, we might need to look deeper or it's empty
+        // But logic in WorkoutEditor will handle:
+        // 1. If 'blocks' provided -> Import blocks
+        // 2. If 'exercises' provided -> Import exercises into one block
+
+        onImport({ title, blocks, exercises });
         onClose();
     };
 
