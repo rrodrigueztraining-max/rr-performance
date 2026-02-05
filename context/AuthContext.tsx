@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 type Role = "coach" | "client" | null;
@@ -38,6 +38,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     // IMMEDIATELY set user to unblock UI, then fetch role
                     setUser(currentUser);
 
+                    // UPDATE LAST ACTIVE
+                    try {
+                        const userRef = doc(db, "users", currentUser.uid);
+                        // We use updateDoc to avoid overwriting other fields if doc exists
+                        // If doc doesn't exist, the createProfile below handles it with setDoc
+                        updateDoc(userRef, {
+                            lastActive: serverTimestamp()
+                        }).catch(e => console.log("Error updating lastActive:", e));
+                    } catch (e) {
+                        // Ignore error if doc doesn't exist yet
+                    }
+
                     // Logic to fetch role specific to this app
                     const COACH_EMAIL = "rrodrigueztraining@gmail.com";
                     const isCoach = currentUser.email?.toLowerCase() === COACH_EMAIL;
@@ -53,6 +65,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                 email: currentUser.email,
                                 displayName: currentUser.displayName || "Usuario Nuevo",
                                 role: assignedRole,
+                                isActive: true, // DEFAULT ACTIVE
                                 createdAt: serverTimestamp(),
                                 lastActive: serverTimestamp(),
                                 workoutStatus: "pending",
