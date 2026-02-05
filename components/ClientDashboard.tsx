@@ -246,32 +246,51 @@ export default function ClientDashboard() {
         }
     };
 
-    const handleFinishWorkout = async () => {
+    const [showFinishModal, setShowFinishModal] = useState(false);
+
+    // ... existing finishBlock ...
+
+    const handleFinishWorkoutTrigger = () => {
+        if (!selectedWorkout || !user) return;
+        setShowFinishModal(true);
+    };
+
+    const confirmFinishWorkout = async () => {
         if (!selectedWorkout || !user) return;
 
         const feedback = {
-            sessionRPE: generalFeedback.sessionRPE || 0,
+            sessionRPE: generalFeedback.sessionRPE || 5, // Default to 5 if not set
             notes: generalFeedback.notes || "",
             painLevels: painLevels
         };
 
-        // Trigger completion logic
-        await finishWorkout(
-            user.uid,
-            selectedWorkout.id,
-            selectedWorkout.title,
-            workoutData,
-            feedback
-        );
+        try {
+            // Trigger completion logic
+            await finishWorkout(
+                user.uid,
+                selectedWorkout.id,
+                selectedWorkout.title,
+                workoutData,
+                feedback
+            );
 
-        // Show success modal
-        setShowSuccessModal(true);
-        confetti({
-            particleCount: 150,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#BC0000', '#ffffff', '#000000']
-        });
+            setShowFinishModal(false);
+            // Show success modal
+            setShowSuccessModal(true);
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#BC0000', '#ffffff', '#000000']
+            });
+
+            // Reset feedback
+            setGeneralFeedback({ notes: '', sessionRPE: 0 });
+
+        } catch (error) {
+            console.error("Error finishing workout:", error);
+            alert("Error al finalizar el entrenamiento. Inténtalo de nuevo.");
+        }
     };
 
     const WorkoutListView = () => {
@@ -712,7 +731,7 @@ export default function ClientDashboard() {
 
                     {/* WORKOUT VIEW - Swaps between LIST and DETAIL and HISTORY DETAIL */}
                     {activeTab === 'workout' && (
-                        selectedWorkout ? <WorkoutDetailView onFinish={handleFinishWorkout} /> :
+                        selectedWorkout ? <WorkoutDetailView onFinish={handleFinishWorkoutTrigger} /> :
                             selectedHistoryItem ? <HistoryDetailView /> :
                                 <WorkoutListView />
                     )}
@@ -763,6 +782,72 @@ export default function ClientDashboard() {
                                     Tu navegador no soporta el tag de video.
                                 </video>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Finish Workout Modal (RPE & Notes) */}
+            {showFinishModal && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200">
+                    <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 relative shadow-2xl">
+                        <button
+                            onClick={() => setShowFinishModal(false)}
+                            className="absolute top-4 right-4 text-gray-500 hover:text-white"
+                        >
+                            ✕
+                        </button>
+
+                        <h2 className="text-2xl font-black text-white italic uppercase mb-1">Resumen de Sesión</h2>
+                        <p className="text-gray-400 text-sm mb-6">Registra tus sensaciones antes de finalizar.</p>
+
+                        <div className="space-y-6">
+                            {/* RPE Selector */}
+                            <div>
+                                <label className="block text-xs font-bold text-[#BC0000] uppercase mb-2">
+                                    RPE Global (Esfuerzo Percibido)
+                                </label>
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs text-gray-500">Suave (1)</span>
+                                    <span className="text-2xl font-bold text-white">{generalFeedback.sessionRPE || 5}</span>
+                                    <span className="text-xs text-gray-500">Máximo (10)</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="1"
+                                    max="10"
+                                    step="1"
+                                    value={generalFeedback.sessionRPE || 5}
+                                    onChange={(e) => setGeneralFeedback({ ...generalFeedback, sessionRPE: parseInt(e.target.value) })}
+                                    className="w-full accent-[#BC0000] h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                                <p className="text-xs text-center text-gray-500 mt-2">
+                                    {generalFeedback.sessionRPE <= 3 ? "Recuperación / Muy Fácil" :
+                                        generalFeedback.sessionRPE <= 6 ? "Moderado / Controlado" :
+                                            generalFeedback.sessionRPE <= 8 ? "Duro / Desafiante" :
+                                                "Fallo / Extenuante"}
+                                </p>
+                            </div>
+
+                            {/* Notes Textarea */}
+                            <div>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-2">
+                                    Notas Generales
+                                </label>
+                                <textarea
+                                    className="w-full bg-black/40 border border-gray-700 rounded-lg p-3 text-white text-sm focus:border-[#BC0000] outline-none transition-colors resize-none h-24"
+                                    placeholder="¿Alguna molestia? ¿Cómo te sentiste hoy?"
+                                    value={generalFeedback.notes}
+                                    onChange={(e) => setGeneralFeedback({ ...generalFeedback, notes: e.target.value })}
+                                ></textarea>
+                            </div>
+
+                            <button
+                                onClick={confirmFinishWorkout}
+                                className="w-full py-4 bg-[#BC0000] hover:bg-red-700 text-white font-bold rounded-lg uppercase tracking-widest transition-all shadow-lg hover:shadow-red-900/40 flex items-center justify-center gap-2"
+                            >
+                                <CheckCircle className="w-5 h-5" /> Confirmar y Finalizar
+                            </button>
                         </div>
                     </div>
                 </div>
